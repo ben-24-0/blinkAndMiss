@@ -511,20 +511,16 @@ while True:
     # Add UI controls for text-to-speech and auto-correction
     speech_status = "ON" if speech_active else "OFF"
     speech_color = (0, 200, 0) if speech_active else (0, 0, 200)
-    cvzone.putTextRect(img, f"Speech: {speech_status}", (450, 430), 
+    cvzone.putTextRect(img, f"S:Speech: {speech_status}", (450, 430), 
                       scale=1, thickness=2, colorR=speech_color)
     
     autocorrect_status = "ON" if auto_correct_active else "OFF"
     autocorrect_color = (0, 200, 0) if auto_correct_active else (0, 0, 200)
-    cvzone.putTextRect(img, f"Auto-Correct: {autocorrect_status}", (450, 400), 
+    cvzone.putTextRect(img, f"A:Auto-Correct: {autocorrect_status}", (450, 400), 
                       scale=1, thickness=2, colorR=autocorrect_color)
     
-    # Add a help text for keyboard controls
-    cvzone.putTextRect(img, "Press 'S' to toggle speech", (50, 430), 
-                      scale=0.8, thickness=1)
-    cvzone.putTextRect(img, "Press 'A' to toggle auto-correct", (50, 445), 
-                      scale=0.8, thickness=1)
-    cvzone.putTextRect(img, "Press 'W' to save word or speak current", (50, 460), 
+    # Add a help text for keyboard controls - simplified
+    cvzone.putTextRect(img, "W: save word or speak current", (50, 430), 
                       scale=0.8, thickness=1)
 
     cv2.imshow("Morse Code Blinker", img)
