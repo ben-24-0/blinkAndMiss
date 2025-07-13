@@ -5,8 +5,8 @@ from cvzone.PlotModule import LivePlot
 import mediapipe as mp
 import time
 
-# cap = cv2.VideoCapture('blinking.mp4')
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture('blinking.mp4')
+# cap = cv2.VideoCapture(0)
 detector = FaceMeshDetector(maxFaces=1)
 plotY =LivePlot(640,360,[20,51],invert=True)
 ratioList=[]
@@ -15,11 +15,29 @@ blinkCounter =0
 counter=0
 color = (255,0,255)
 
-# Peak detection variables
-last_peak_time = None
-peak_detected = False
-blink_start_time = None
+# --- Parameters for robust blink detection & SOS ---
+# DURATION
+MIN_SHORT_BLINK_DURATION = 0.08  # Min duration for a short blink
+MAX_SHORT_BLINK_DURATION = 0.4   # Max duration for a short blink (and min for a long one)
+MAX_LONG_BLINK_DURATION = 1.5    # Max duration for a long blink
+RESET_DURATION = 4.0             # Seconds of continuous eye closure to reset the sequence
+
+# STABILITY
+STABLE_FRAMES = 2  # Number of consecutive frames the eye must be closed/open to register a state change
+
+# SOS PATTERN
+SOS_PATTERN = ["SHORT", "SHORT", "SHORT", "LONG", "LONG", "LONG", "SHORT", "SHORT", "SHORT"]
+blink_sequence = []
+sos_detected_time = 0
+SOS_COOLDOWN = 5 # seconds to display SOS message and ignore new blinks
+
+# --- State variables ---
 in_blink = False
+blink_start_time = 0
+stable_counter = 0
+last_blink_type = ""
+reset_feedback_time = 0
+
 while True:
 
     if cap.get(cv2.CAP_PROP_POS_FRAMES)==cap.get(cv2.CAP_PROP_FRAME_COUNT):
@@ -50,37 +68,76 @@ while True:
             ratioList.pop(0)
         ratioAvg =sum(ratioList)/len(ratioList)
 
-        current_time = time.time()
-        
-        # Detect when blink starts (ratio drops below threshold)
-        if ratioAvg < 35 and not in_blink:
-            in_blink = True
-            blink_start_time = current_time
-        
-        # Detect when blink ends (ratio goes back above threshold)
-        elif ratioAvg >= 35 and in_blink:
+        # --- Reset sequence if eyes are closed for too long ---
+        if in_blink and (time.time() - blink_start_time) > RESET_DURATION:
+            blink_sequence = []
             in_blink = False
-            if blink_start_time:
-                blink_duration = current_time - blink_start_time
+            stable_counter = 0
+            reset_feedback_time = time.time()
+            print("Sequence reset due to long eye closure.")
+
+        # --- Display reset feedback for 1 second ---
+        if time.time() - reset_feedback_time < 1.0:
+            cvzone.putTextRect(img, "SEQUENCE RESET", (50, 150), scale=2, thickness=2, colorR=(0, 255, 0), colorT=(0, 0, 0))
+
+        # --- Robust Blink Detection Logic ---
+        eye_closed = ratioAvg < 35
+
+        # If SOS was recently detected, just display the message and skip detection
+        if time.time() - sos_detected_time < SOS_COOLDOWN:
+            cvzone.putTextRect(img, "SOS DETECTED!", (50, 200), scale=3, thickness=5, colorR=(0, 0, 255), colorT=(255, 255, 255))
+            in_blink = False # Reset state
+            stable_counter = 0
+        
+        # --- State Change with Stability Check ---
+        elif eye_closed and not in_blink:
+            stable_counter += 1
+            if stable_counter >= STABLE_FRAMES:
+                in_blink = True
+                blink_start_time = time.time()
+                stable_counter = 0
+        elif not eye_closed and in_blink:
+            stable_counter += 1
+            if stable_counter >= STABLE_FRAMES:
+                in_blink = False
+                blink_duration = time.time() - blink_start_time
                 
-                # Classify and print blink duration
-                if blink_duration < 0.3:
+                # --- Blink Classification ---
+                if MIN_SHORT_BLINK_DURATION <= blink_duration < MAX_SHORT_BLINK_DURATION:
+                    last_blink_type = "SHORT"
+                    blink_sequence.append("SHORT")
                     print("SHORT")
-                else:
+                elif MAX_SHORT_BLINK_DURATION <= blink_duration < MAX_LONG_BLINK_DURATION:
+                    last_blink_type = "LONG"
+                    blink_sequence.append("LONG")
                     print("LONG")
                 
-                last_peak_time = current_time
+                # --- SOS Pattern Matching ---
+                if len(blink_sequence) >= len(SOS_PATTERN):
+                    # Check if the last N blinks match the SOS pattern
+                    if blink_sequence[-len(SOS_PATTERN):] == SOS_PATTERN:
+                        print("SOS DETECTED!")
+                        sos_detected_time = time.time()
+                        blink_sequence = [] # Clear sequence after detection
+                
+                # Keep the sequence list from growing indefinitely
+                if len(blink_sequence) > len(SOS_PATTERN):
+                    blink_sequence.pop(0)
 
-        if ratioAvg<35 and counter ==0:
-            blinkCounter+=1
-            color=(0,200,2)
-            counter=1
-        if counter !=0:
-            counter+=1
-            if counter >14:
-                counter=0   
-                color = (255,0,255)
+                blinkCounter += 1
+                color = (0, 200, 2)
+                stable_counter = 0
+        else:
+            # Reset counter if state is not stable
+            stable_counter = 0
+
+        # --- Reset color after a short period ---
+        if color == (0, 200, 2) and time.time() - (blink_start_time if in_blink else time.time()) > 0.5:
+             color = (255,0,255)
+
         cvzone.putTextRect(img,f'BlinkCount:{blinkCounter}',(100,100),colorR=color)
+        # Display the current sequence for debugging, now at the bottom
+        cvzone.putTextRect(img, f'Sequence: {" ".join(blink_sequence)}', (20, 340), scale=0.9, thickness=1, colorR=(200, 200, 200), colorT=(0,0,0))
         imgPlot=plotY.update(ratioAvg,color)
         img = cv2.resize(img,(640,360))
         imgStack=cvzone.stackImages ([img,imgPlot],2,1)
