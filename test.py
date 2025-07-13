@@ -2,6 +2,7 @@ import cv2
 import cvzone
 from cvzone.FaceMeshModule import FaceMeshDetector
 import mediapipe as mp
+import time
 
 # Initialize the face mesh detector
 cap = cv2.VideoCapture('blinking.mp4')
@@ -11,6 +12,10 @@ detector = FaceMeshDetector(maxFaces=1)
 blink_counter = 0
 ratio_list = []
 blink_threshold = 0.35  # Adjust this value for sensitivity
+
+# Simple blink duration tracking
+is_blinking = False
+blink_start_time = None
 
 # Eye landmarks indices for mediapipe
 LEFT_EYE = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398]
@@ -64,12 +69,33 @@ while True:
         # Keep only last 5 ratios for smoothing
         if len(ratio_list) > 5:
             ratio_list.pop(0)
+        
+        # Simple blink detection using peaks
+        eye_closed = avg_ratio < blink_threshold
+        
+        # Start timing when blink begins
+        if eye_closed and not is_blinking:
+            is_blinking = True
+            blink_start_time = time.time()
             
-        # Check for blink
+        # End timing when blink finishes
+        elif not eye_closed and is_blinking:
+            is_blinking = False
+            if blink_start_time:
+                blink_duration = time.time() - blink_start_time
+                
+                # Classify and log the blink
+                if blink_duration < 0.4:  # Less than 0.4 seconds
+                    print(f"SHORT blink - Duration: {blink_duration:.2f}s")
+                else:  # 0.4 seconds or more
+                    print(f"LONG blink - Duration: {blink_duration:.2f}s")
+                
+                blink_counter += 1
+            
+        # Check for blink (original logic for counting)
         if len(ratio_list) >= 3:
             if avg_ratio < blink_threshold and all(r < blink_threshold for r in ratio_list[-3:]):
                 if len(ratio_list) >= 5 and any(r > blink_threshold for r in ratio_list[-5:-2]):
-                    blink_counter += 1
                     ratio_list.clear()  # Clear to avoid double counting
         
         # Draw eye landmarks
