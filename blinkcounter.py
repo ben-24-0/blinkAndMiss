@@ -5,7 +5,8 @@ from cvzone.PlotModule import LivePlot
 import mediapipe as mp
 import time
 
-cap = cv2.VideoCapture('blinking.mp4')
+# cap = cv2.VideoCapture('blinking.mp4')
+cap = cv2.VideoCapture('retrd_blinking.mp4')
 # cap = cv2.VideoCapture(0)
 detector = FaceMeshDetector(maxFaces=1)
 plotY =LivePlot(640,360,[20,51],invert=True)
