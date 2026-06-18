@@ -1,4 +1,4 @@
-# 🧠 Morse Code Blinker 👁️👁️
+# Morse Code Blinker 👁️👁️
 ### Blink based Morse code communication using computer vision
 
 ---
